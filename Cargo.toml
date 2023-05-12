@@ -1,0 +1,18 @@
+[package]
+name = "kit"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+
+[[bin]]
+name = "kit"
+path = "src/bin/kit.rs"
+
+[dependencies]
+clap = { version = "4.2.4", features = ["derive"] }
+crossterm = { version = "0.22", features = ["event-stream"] }
+futures = "0.3"
+itertools = "0.10"
+ratatui = "0.20"
+tokio = { version = "1", features = ["full"] }
