@@ -14,5 +14,6 @@ clap = { version = "4.2.4", features = ["derive"] }
 crossterm = { version = "0.22", features = ["event-stream"] }
 futures = "0.3"
 itertools = "0.10"
+notify-rust = "4"
 ratatui = "0.20"
 tokio = { version = "1", features = ["full"] }

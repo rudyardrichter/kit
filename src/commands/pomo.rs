@@ -7,6 +7,7 @@ use clap::Parser;
 use crossterm::event::{Event, EventStream, KeyCode, KeyEvent, KeyModifiers};
 use futures::{FutureExt, StreamExt};
 use itertools::Itertools;
+use notify_rust::Notification;
 use ratatui::{
     backend::CrosstermBackend,
     layout::{Constraint, Direction, Layout},
@@ -160,6 +161,12 @@ impl Pomo {
                     }
                 }
             }
+            // end of segment
+            countdown_handle.await?.unwrap();
+            Notification::new()
+                .summary("kit pomo")
+                .body(&format!("{} segment done!", segment))
+                .show()?;
         }
         self.tui_shutdown(&mut terminal)?;
         Ok(())
@@ -170,8 +177,8 @@ impl Pomo {
 enum PomoInput {
     Help,
     Pause,
-    Skip,
     Quit,
+    Skip,
 }
 
 impl TryFrom<Event> for PomoInput {
