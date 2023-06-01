@@ -28,13 +28,4 @@ pub trait WithTui {
             .execute(DisableMouseCapture)?;
         Ok(())
     }
-
-    fn with_tui(
-        &self,
-        f: fn(&mut Terminal<CrosstermBackend<Stdout>>) -> Result<(), Box<dyn std::error::Error>>,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        let mut terminal = self.tui_setup()?;
-        f(&mut terminal)?;
-        self.tui_shutdown(&mut terminal)
-    }
 }

@@ -720,6 +720,7 @@ dependencies = [
  "itertools",
  "notify-rust",
  "ratatui",
+ "regex",
  "tokio",
 ]
 

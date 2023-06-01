@@ -1,7 +1,8 @@
 mod commands;
 mod with_tui;
 
-use crate::commands::pomo::Pomo;
+use crate::commands::pomo::PomoCommand;
+use crate::commands::word::WordCommand;
 use clap::{Parser, Subcommand};
 use std::error::Error;
 
@@ -18,13 +19,17 @@ struct Cli {
 #[derive(Subcommand, Debug)]
 enum Command {
     #[command(name = "pomo")]
-    Pomo(Pomo),
+    Pomo(PomoCommand),
+
+    #[command(name = "word")]
+    Word(WordCommand),
 }
 
 impl Command {
     async fn run(&self) -> Result<(), Box<dyn Error>> {
         match self {
             Command::Pomo(pomo) => pomo.run().await,
+            Command::Word(word) => word.run().await,
         }
     }
 }

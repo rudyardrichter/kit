@@ -1,10 +1,15 @@
 use std::{
+    io::stdout,
     iter::{once, repeat},
     time::Duration,
 };
 
 use clap::Parser;
-use crossterm::event::{Event, EventStream, KeyCode, KeyEvent, KeyModifiers};
+use crossterm::{
+    event::{Event, EventStream, KeyCode, KeyEvent, KeyModifiers},
+    terminal::SetTitle,
+    ExecutableCommand,
+};
 use futures::{FutureExt, StreamExt};
 use itertools::Itertools;
 use notify_rust::Notification;
@@ -57,7 +62,7 @@ impl std::fmt::Display for PomoSegment {
 
 #[derive(Debug, Parser)]
 #[clap(about = "Run pomodoro timers. Press 'h' to see help for keyboard shortcuts while running.")]
-pub struct Pomo {
+pub struct PomoCommand {
     #[arg(
         short,
         long,
@@ -95,9 +100,9 @@ pub struct Pomo {
     n_pomos: u64,
 }
 
-impl WithTui for Pomo {}
+impl WithTui for PomoCommand {}
 
-impl Pomo {
+impl PomoCommand {
     pub async fn run(&self) -> Result<(), Box<dyn std::error::Error>> {
         // create iterator that goes: work, short, work, short, ..., work, long, repeat
         let segments_once = Itertools::intersperse(
@@ -163,9 +168,22 @@ impl Pomo {
             }
             // end of segment
             countdown_handle.await?.unwrap();
+            let notification_body_line_0 = match segment {
+                PomoSegment::Work(_) => "Work segment done!",
+                PomoSegment::ShortBreak(_) => "Short break over.",
+                PomoSegment::LongBreak(_) => "Long break over.",
+            };
+            let notification_body_line_1 = match segments_list[(i + 1) % segments_list.len()] {
+                PomoSegment::Work(_) => "Back to work!",
+                PomoSegment::ShortBreak(_) => "Starting short break.",
+                PomoSegment::LongBreak(_) => "Starting long break.",
+            };
             Notification::new()
                 .summary("kit pomo")
-                .body(&format!("{} segment done!", segment))
+                .body(&format!(
+                    "{}{}",
+                    notification_body_line_0, notification_body_line_1
+                ))
                 .show()?;
         }
         self.tui_shutdown(&mut terminal)?;
@@ -340,6 +358,12 @@ fn display_countdown(
             f.render_widget(help_table, chunks_0_1[0]);
         }
     })?;
+    stdout().execute(SetTitle(format!(
+        "{} - {} - {}",
+        std::env::args().join(" "),
+        segments_list[i_segment % segments_list.len()],
+        progress_show_time
+    )))?;
     Ok(())
 }
 
