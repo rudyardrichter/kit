@@ -1,4 +1,4 @@
-use std::io::stdout;
+use std::io::{stdout, Stdout};
 
 use clap::Parser;
 use crossterm::{
@@ -8,7 +8,7 @@ use crossterm::{
 };
 use futures::StreamExt;
 use itertools::Itertools;
-use ratatui::{layout, widgets};
+use ratatui::{backend::CrosstermBackend, layout, widgets, Frame};
 use regex::Regex;
 
 use crate::with_tui::WithTui;
@@ -20,22 +20,52 @@ const WORDS: &str = include_str!("../../data/words.txt");
 pub struct WordCommand {
     #[arg(short, long, help = "Launch an interactive TUI to input regexes")]
     interactive: bool,
-}
 
-impl WithTui for WordCommand {}
+    #[arg(help = "Pattern to match against")]
+    pattern: Option<String>,
+}
 
 impl WordCommand {
     pub async fn run(&self) -> Result<(), Box<dyn std::error::Error>> {
+        if self.interactive {
+            WordRegex::new().run().await?;
+        } else {
+            MatchEngine::new(self.pattern.clone().unwrap())
+                .matches()?
+                .iter()
+                .for_each(|s| println!("{}", s));
+        }
+        Ok(())
+    }
+}
+
+struct WordRegex {
+    match_engine: MatchEngine,
+    current_page: usize,
+}
+
+impl WithTui for WordRegex {}
+
+impl WordRegex {
+    fn new() -> Self {
+        Self {
+            match_engine: MatchEngine::new("".to_string()),
+            current_page: 0,
+        }
+    }
+
+    fn render_to_frame(frame: Frame<CrosstermBackend<Stdout>>) -> () {}
+
+    async fn run(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         let mut terminal = self.tui_setup()?;
         let mut event_stream = EventStream::new();
-        let mut match_engine = MatchEngine::new();
-        let mut current_page = 0;
         loop {
             stdout().execute(SetTitle(format!(
                 "{} - {}",
                 std::env::args().join(" "),
-                match_engine.pattern,
+                self.match_engine.pattern,
             )))?;
+            // TODO: make matches & terminal render async
             terminal.draw(|f| {
                 let chunks = layout::Layout::default()
                     .direction(layout::Direction::Vertical)
@@ -45,24 +75,22 @@ impl WordCommand {
                     )
                     .split(f.size());
                 let input_widget =
-                    widgets::Paragraph::new(format!(" > {}", match_engine.pattern.clone()))
+                    widgets::Paragraph::new(format!(" > {}", self.match_engine.pattern.clone()))
                         .block(widgets::Block::default().borders(widgets::Borders::ALL))
                         .wrap(widgets::Wrap { trim: true });
                 // TODO: nicer table formatting, ellipsis
-                let matches = match_engine
+                let matches = self
+                    .match_engine
                     .matches()
                     .unwrap_or_else(|_| vec!["Error parsing regex!"]);
                 let column_spacing = 2;
                 let len_longest_match = matches.iter().map(|s| s.len()).max().unwrap_or(0);
-                let n_columns_wanted = matches.len() / chunks[1].width as usize;
-                let n_columns_available =
-                    chunks[1].width as usize / (len_longest_match + column_spacing);
-                let n_columns = n_columns_wanted.min(n_columns_available).max(1);
+                let n_columns = chunks[1].width as usize / (len_longest_match + column_spacing);
                 let n_rows = chunks[1].height as usize;
                 let column_widths =
                     vec![layout::Constraint::Length(len_longest_match as u16); n_columns];
                 let n_words_visible = n_rows * n_columns;
-                let start_at = current_page * n_words_visible;
+                let start_at = self.current_page * n_words_visible;
                 // TODO: don't allow paging past end
                 let table_entries: Vec<widgets::Row> = transpose(
                     matches
@@ -80,7 +108,7 @@ impl WordCommand {
                 .collect();
                 let matches_table = widgets::Table::new(table_entries)
                     .widths(column_widths.as_slice())
-                    //.column_spacing(column_spacing as u16)
+                    .column_spacing(column_spacing as u16)
                     .block(
                         widgets::Block::default()
                             .title(format!("Matches ({} total)", matches.len()))
@@ -100,24 +128,24 @@ impl WordCommand {
                         KeyEvent {
                             code: KeyCode::Char('u'),
                             modifiers: KeyModifiers::CONTROL,
-                        } => current_page = current_page.saturating_sub(1),
+                        } => self.current_page = self.current_page.saturating_sub(1),
                         KeyEvent {
                             code: KeyCode::Char('d'),
                             modifiers: KeyModifiers::CONTROL,
-                        } => current_page = current_page.saturating_add(1),
+                        } => self.current_page = self.current_page.saturating_add(1),
                         KeyEvent {
                             code: KeyCode::Char(c),
                             ..
                         } => {
-                            match_engine.pattern.push(c);
-                            current_page = 0;
+                            self.match_engine.pattern.push(c);
+                            self.current_page = 0;
                         }
                         KeyEvent {
                             code: KeyCode::Backspace,
                             ..
                         } => {
-                            match_engine.pattern.pop();
-                            current_page = 0;
+                            self.match_engine.pattern.pop();
+                            self.current_page = 0;
                         }
                         KeyEvent {
                             code: KeyCode::Esc, ..
@@ -141,10 +169,8 @@ struct MatchEngine {
 }
 
 impl MatchEngine {
-    fn new() -> Self {
-        Self {
-            pattern: String::new(),
-        }
+    fn new(pattern: String) -> Self {
+        Self { pattern }
     }
 
     fn matches(&self) -> Result<Vec<&str>, regex::Error> {
